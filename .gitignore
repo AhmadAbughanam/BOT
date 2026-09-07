@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 config/schedule.yaml
+config/sites.yaml
 *.key
 *.pem
 secrets/

@@ -1,157 +1,304 @@
 # BOT
 
-A personal assistant bot that reaches me on the channel I already use (WhatsApp, Instagram DM, or email),
-pulls together the information that actually matters to me from across the web and APIs, and uses an LLM to
-answer in the clearest possible way. It runs unattended on a VPS and delivers scheduled briefings at set
-times of day (news with breakfast, market/weather midday, a wrap-up in the evening, etc.).
+A personal assistant bot I talk to on **Telegram**. It pulls together the information that actually
+matters to me — from a fixed registry of sites and from my own email — runs everything through a
+self-evaluating refine loop, and delivers scheduled briefings. It runs unattended on a VPS and fires
+each task at a set time of day (news with breakfast, markets midday, a wrap-up in the evening).
 
 ## Goals
 
-- **One channel, my choice.** Talk to the bot the same way I talk to a person: WhatsApp, Instagram, or email.
-- **Signal over noise.** Aggregate from many sources, then run a self-evaluating refine loop: the agent
-  drafts an answer, scores its own output against explicit criteria (eval-style), revises, and repeats.
-  When the loop ends, only the highest-scoring draft is sent.
+- **One channel: Telegram.** I send commands and receive briefings there. Email and Instagram are secondary.
+- **Email triage.** The bot has read access to my mailbox and filters, groups, and summarizes it the way I ask
+  ("show me anything from recruiters this week", "every morning summarize unread mail, skip newsletters").
+- **Signal over noise.** Every answer and brief goes through a self-evaluating refine loop: draft → score its
+  own output against eval-style criteria → revise → repeat. When the loop ends, only the highest-scoring draft is sent.
+- **Hosted LLMs, free tiers first.** Call APIs (OpenRouter, Groq, Gemini …) in a fallback chain. Only drop to a
+  local Ollama model when every hosted provider is rate-limited.
+- **Locked scraping registry.** No open-web crawling. The bot works from a fixed list of sites, searches each
+  one's own search bar for a title/keywords, and files results under categories / subcategories.
 - **Scheduled briefings.** Each task fires at a specific time of day, cron-style, on the VPS.
-- **On-demand answers.** Ask a question any time and get an LLM answer grounded in freshly scraped / fetched data.
-- **Open source first.** Prefer self-hostable, free components; keep paid APIs optional and swappable.
+- **Python only.** FastAPI service, PostgreSQL + pgvector for storage and semantic search.
 
 ## High-level architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌────────────────────────────┐
 │  Channels   │────▶│   Core /     │────▶│  LLM layer                 │
-│ WhatsApp    │     │   Router     │     │  ┌──────────────────────┐  │
-│ Instagram   │◀────│              │◀────│  │ refine loop:         │  │
-│ Email       │     └──────┬───────┘     │  │ draft → self-eval →  │  │
-└─────────────┘            │             │  │ revise → repeat →    │  │
-                           ▼             │  │ pick best-scoring    │  │
-                  ┌────────────────────┐ │  └──────────────────────┘  │
-                  │  Data connectors   │ └────────────────────────────┘
-                  │  news / weather /  │
-                  │  finance / custom  │
-                  │  scrapers / APIs   │
-                  └────────────────────┘
-                           ▲
-                  ┌────────┴───────┐
-                  │  Scheduler     │  (cron: breakfast news, etc.)
-                  └────────────────┘
+│ Telegram    │     │   Router     │     │  provider chain:           │
+│  (primary)  │◀────│              │◀────│   Groq → Gemini →          │
+│ Email       │     └──────┬───────┘     │   OpenRouter → … → Ollama  │
+│ Instagram   │            │             │  ┌──────────────────────┐  │
+└─────────────┘            │             │  │ refine loop:         │  │
+                           ▼             │  │ draft → self-eval →  │  │
+        ┌──────────────────┴──────────┐  │  │ revise → repeat →    │  │
+        │  Data sources               │  │  │ pick best-scoring    │  │
+        │  • scraping (locked site    │  │  └──────────────────────┘  │
+        │    registry, Playwright)    │  └────────────────────────────┘
+        │  • email (IMAP read+filter) │
+        │  • connectors: weather,     │
+        │    finance, RSS feeds       │
+        └──────────────┬──────────────┘
+                       ▼
+        ┌──────────────────────────────┐
+        │  PostgreSQL + pgvector        │
+        │  items, embeddings, emails,   │
+        │  messages, briefs, traces     │
+        └──────────────┬───────────────┘
+                       ▲
+              ┌────────┴───────┐
+              │  Scheduler     │  cron: breakfast news, email digest, …
+              └────────────────┘
 ```
 
-- **Channels** — adapters that receive messages and send replies. One is active at a time to start.
-- **Core / Router** — normalizes incoming messages, decides intent (question vs. command), calls connectors + LLM, formats the reply.
-- **Data connectors** — pluggable modules for news, weather, finance, calendar, and site-specific scrapers.
-- **LLM layer** — answering and summarization behind a provider-agnostic interface, wrapped in the **refine loop** below.
-- **Scheduler** — triggers briefing jobs at configured local times and pushes results to the active channel.
-- **Storage** — conversation history, source cache, user preferences (what "matters to me"), and per-run loop traces (drafts + scores) for debugging.
+- **Channels** — Telegram is primary (commands + briefings). Email is both a data source and a delivery target. Instagram is optional later.
+- **Core / Router** — normalizes incoming messages, decides intent (question / command / email-filter request), calls data sources + LLM, formats the reply.
+- **LLM layer** — a provider chain of hosted free-tier APIs with a local Ollama fallback, wrapped in the refine loop.
+- **Data sources** — the locked scraping registry, the email reader/filter, and API connectors (weather, finance, RSS).
+- **Storage** — PostgreSQL with the pgvector extension for embeddings / semantic search and dedup.
+- **Scheduler** — system cron triggers briefing jobs at configured local times and pushes results to Telegram (or email).
+
+## Channels
+
+| Channel | Role | Library |
+| --- | --- | --- |
+| **Telegram** | Primary. I send commands, get briefings and answers. | `python-telegram-bot` (or `aiogram`), webhook into FastAPI |
+| **Email** | Data source: read + filter my mailbox. Also a delivery target for briefings. | IMAP via `aioimaplib` / `imaplib`; SMTP for sending; Gmail API optional |
+| **Instagram** | Optional, later. | `instagrapi` |
+
+### Email access & filtering
+
+- **Read access** to my mailbox over IMAP (app password, or OAuth for Gmail). Read-first: the bot never
+  deletes or sends without an explicit confirmation step.
+- The bot can: list / search messages, apply filters I describe in natural language, group by sender or
+  topic, summarize threads, extract action items, flag important senders, and draft (not auto-send) replies.
+- Natural-language filters compile to an **IMAP search query** for the cheap first pass, then an **LLM
+  post-filter** for the fuzzy part ("skip newsletters", "only things that need a reply").
+- Example request: *"Every morning, summarize unread mail from the last 24h, group by sender, skip
+  newsletters and receipts, and list anything that looks like it needs a reply."*
+- Only message **metadata + generated summaries** are cached in Postgres; full bodies are fetched on demand.
+
+## LLM layer — hosted first, local fallback
+
+An ordered **provider chain**. Each request tries providers top to bottom until one succeeds inside its
+free-tier limits; on `429` / quota / auth errors it falls through to the next. Local Ollama is last and is
+only reached when every hosted provider is exhausted.
+
+| Priority | Provider | Notes |
+| --- | --- | --- |
+| 1 | **Groq** | Free tier, very fast; Llama / Qwen / GPT-OSS models. ("grock" = Groq; xAI's Grok API has no real free tier, so it's skipped.) |
+| 2 | **Google Gemini** | Free tier (Gemini Flash), generous daily quota |
+| 3 | **OpenRouter** | Free models via the `:free` suffix; rotates upstream providers |
+| 4 | **Cerebras / others** | Optional extra free tiers, easy to add as more adapters |
+| 5 *(fallback)* | **Local Ollama** | Only when all hosted providers are rate-limited. Smaller model (e.g. `llama3.1:8b` / `qwen2.5:7b`), slower, no quota |
+
+- One `LLMProvider` interface; each provider is a thin adapter (chat, embeddings where supported).
+- Config lives in `.env` + `config/schedule.yaml`: `llm.chain` is the ordered list, each entry has an API
+  key ref, model id, and rpm / rpd caps.
+- A local `llm_usage` table tracks per-provider request/token counts so the chain can **pre-empt** a limit
+  rather than wait for a `429`.
+- The refine loop's **judge step** can pin a specific (stronger) provider regardless of chain order.
+- Embeddings: prefer a hosted free embedding endpoint (Gemini / OpenRouter); fall back to a local Ollama
+  embedding model. Vectors are stored in pgvector.
 
 ## Refine loop (self-evaluation)
 
 Every answer and every scheduled brief goes through the same loop instead of being sent on the first pass:
 
-1. **Draft.** The agent produces a candidate answer from the connector data.
-2. **Self-eval.** The agent scores its own draft against explicit criteria — the same criteria we'd
-   write in an eval set: factual grounding in the sources, relevance to my stated interests, no filler,
-   correct dates/numbers, right length for the channel. Output is a numeric score plus concrete critique.
+1. **Draft.** The agent produces a candidate answer from the source data.
+2. **Self-eval.** The agent scores its own draft against explicit criteria — the same criteria we'd write
+   in an eval set: factual grounding in the sources, relevance to my stated interests, no filler, correct
+   dates / numbers, right length for the channel. Output is a numeric score plus concrete critique.
 3. **Revise.** The agent rewrites the draft to address its own critique.
 4. **Repeat** steps 2–3 until either the score clears a threshold or a max iteration count is hit.
 5. **Send best.** Once the loop ends, the highest-scoring draft across all iterations is what gets sent —
    not necessarily the last one.
 
-Config knobs (in `config/schedule.yaml` per task, plus a global default):
+Config knobs (in `config/schedule.yaml`, per task, plus a global default):
 
 | Knob | Meaning |
 | --- | --- |
 | `loop.max_iterations` | Hard cap on draft→revise cycles (e.g. 3) |
 | `loop.score_threshold` | Stop early once a draft scores at/above this |
 | `loop.criteria` | The checklist the self-eval scores against |
-| `loop.judge_model` | Optional separate/stronger model for the scoring step |
-| `loop.keep_traces` | Persist every draft + score for later inspection |
+| `loop.judge_model` | Optional separate/stronger provider+model for the scoring step |
+| `loop.keep_traces` | Persist every draft + score to `loop_traces` for later inspection |
 
 Notes: the scoring step can use a second model as an LLM-judge to reduce the "grades its own homework"
 bias; all drafts and scores are logged so the loop's behaviour can itself be evaluated offline.
 
-## Candidate open-source / tooling choices
+## Scraping — locked site registry
 
-Nothing here is locked in yet — this is the shortlist to evaluate.
+The bot does **not** crawl the open web. It works from a fixed registry of sites in `config/sites.yaml`.
+For a given query/title it:
 
-| Concern | Options to evaluate |
+1. Selects the sites whose category matches the request.
+2. Opens each site and **uses that site's own on-page search bar** (driven by Playwright) to search the
+   title / keywords — or hits the site's search URL directly when a template is known.
+3. Extracts the top results: title, URL, published date, snippet.
+4. Runs the batch through the refine loop for summarization and ranking.
+5. Saves them to Postgres tagged with **category / subcategory**, plus an embedding in pgvector for
+   semantic search and dedup.
+
+### Category design
+
+Two levels: a top-level `category` and a `subcategory`. Each registry entry is filed under exactly one pair.
+
+| Category | Subcategories |
 | --- | --- |
-| Language / runtime | Python (async) or Node.js |
-| WhatsApp | WhatsApp Cloud API (official), or `whatsapp-web.js` / Baileys (unofficial) |
-| Instagram | Instagram Graph API (Messaging), or `instagrapi` for read-heavy tasks |
-| Email | IMAP/SMTP via standard libs, or a service like a self-hosted Postfix + fetch loop |
-| LLM | Local via Ollama (Llama 3.x, Qwen, Mistral); hosted (Claude, OpenAI) as optional backends |
-| Orchestration | LangChain / LlamaIndex, or a thin custom layer |
-| Scraping | `httpx` + `selectolax`/`BeautifulSoup`, Playwright for JS-heavy sites, `trafilatura` for article extraction |
-| Feeds | `feedparser` for RSS/Atom |
-| Scheduling | system `cron` on the VPS, or APScheduler / `node-cron` in-process |
-| Vector store (optional) | Chroma, Qdrant, or SQLite + `sqlite-vec` |
-| Process mgmt on VPS | `systemd` units, or Docker Compose + `pm2` |
-| Secrets | `.env` (git-ignored), or `sops` / `age` for encrypted config |
+| `news` | `world`, `mena`, `politics`, `economy` |
+| `tech` | `ai`, `software`, `hardware`, `startups` |
+| `markets` | `equities`, `crypto`, `commodities`, `macro` |
+| `science` | `ai-research`, `space`, `health`, `climate` |
+| `learning` | `tutorials`, `docs`, `courses` |
+| `personal` | `jobs`, `realestate`, `deals` |
 
-## Planned project structure
+The list is config, not code — add categories/subcategories in `config/sites.yaml` and the DB `sources`
+table mirrors it on startup.
+
+### Site registry entry
+
+```yaml
+sites:
+  - id: hn
+    name: Hacker News
+    base_url: https://news.ycombinator.com
+    category: tech
+    subcategory: software
+    search:
+      mode: url_template               # url_template | search_bar
+      url_template: "https://hn.algolia.com/?q={query}&sort=byPopularity"
+      result_selector: "a.Story_link"
+
+  - id: reuters
+    name: Reuters
+    base_url: https://www.reuters.com
+    category: news
+    subcategory: world
+    search:
+      mode: search_bar
+      open_search_selector: "button[aria-label='Open search bar']"
+      input_selector: "input[name='query']"
+      submit_key: "Enter"
+      result_selector: "a[data-testid='TitleLink']"
+```
+
+- `mode: search_bar` → Playwright clicks the search control, types the query, submits, scrapes results.
+- `mode: url_template` → skip the UI and request the site's search URL directly (preferred when it exists).
+- `result_selector` → CSS selector for result links on the results page.
+- Politeness: per-site rate limit, response cache, and respect for each site's `robots.txt` / ToS.
+
+## Data model (PostgreSQL + pgvector)
+
+| Table | Purpose |
+| --- | --- |
+| `sources` | The site registry, mirrored from `config/sites.yaml` (id, name, base_url, category, subcategory, search config). |
+| `items` | Collected entries: title, url, published_at, raw_text, summary, category, subcategory, source_id, fetched_at. |
+| `item_embeddings` | `vector` column (pgvector) for semantic search and dedup against `items`. |
+| `emails` | Metadata + generated summary of processed mail (message_id, from, subject, date, labels, summary). No full bodies. |
+| `messages` | Telegram conversation history for context. |
+| `briefs` | Generated briefings and which `items` / `emails` they cited. |
+| `loop_traces` | Refine-loop drafts + scores per run (when `loop.keep_traces`). |
+| `llm_usage` | Per-provider request / token counters for limit tracking. |
+
+SQLAlchemy 2.x models; Alembic migrations; the pgvector extension enabled via the first migration.
+
+## Project structure
 
 ```
 BOT/
 ├── README.md
-├── .gitignore
-├── .env.example            # documented config keys, no secrets
+├── pyproject.toml
+├── .env.example                 # documented config keys, no secrets
+├── docker-compose.yml           # postgres + pgvector for local dev
 ├── config/
-│   └── schedule.example.yaml   # task -> time-of-day mappings
-├── src/
-│   ├── core/               # router, intent, reply formatting
-│   ├── channels/           # whatsapp/, instagram/, email/
-│   ├── connectors/         # news/, weather/, finance/, scrapers/
-│   ├── llm/                # provider interface + implementations
-│   ├── refine/             # draft/self-eval/revise loop + scoring criteria
-│   ├── scheduler/          # job definitions + runner
-│   └── storage/            # db models, cache
+│   ├── schedule.example.yaml    # task -> time-of-day + per-task loop knobs
+│   └── sites.example.yaml       # locked scraping registry
+├── src/bot/
+│   ├── main.py                  # FastAPI app: Telegram webhook, health, admin
+│   ├── core/                    # router, intent detection, reply formatting
+│   ├── channels/               # telegram/, email/, instagram/
+│   ├── llm/                     # provider chain + adapters: groq, gemini, openrouter, ollama
+│   ├── refine/                  # draft / self-eval / revise loop + criteria
+│   ├── connectors/             # weather/, finance/, feeds/
+│   ├── scraping/               # playwright runner, site registry, result extractors
+│   ├── storage/                # SQLAlchemy models, pgvector helpers
+│   └── scheduler/             # cron job definitions + `python -m bot.scheduler` runner
+├── alembic/                     # DB migrations
 ├── tests/
-└── deploy/                 # systemd units / docker-compose / cron snippets
+└── deploy/                      # systemd units / docker-compose / cron snippets
 ```
+
+## Tech choices
+
+| Concern | Choice |
+| --- | --- |
+| Language | Python 3.12 |
+| Web framework | FastAPI + Uvicorn |
+| Telegram | `python-telegram-bot` (or `aiogram`), webhook |
+| Email | IMAP via `aioimaplib` / `imaplib`; SMTP for sending; Gmail API optional |
+| LLM (hosted) | Groq, Google Gemini, OpenRouter — free tiers, in a fallback chain |
+| LLM (fallback) | Local Ollama (`llama3.1:8b` / `qwen2.5:7b`) — only when hosted limits are hit |
+| Scraping | Playwright (Python) + `selectolax` / BeautifulSoup + `trafilatura` for article extraction |
+| Feeds | `feedparser` for RSS/Atom |
+| Database | PostgreSQL 16 |
+| Vector store | `pgvector` extension (no separate vector DB) |
+| ORM / migrations | SQLAlchemy 2.x + Alembic |
+| Scheduling | system `cron` on the VPS calling `python -m bot.scheduler run <task>`; APScheduler optional in-process |
+| Process mgmt | `systemd` unit for the API, or Docker Compose |
+| Secrets | git-ignored `.env`; `sops` / `age` optional |
 
 ## Scheduled tasks (example)
 
-Configured in `config/schedule.yaml` (local VPS time):
+Configured in `config/schedule.yaml` (local VPS time). Each task runs through the refine loop and is
+delivered to Telegram unless it names another channel.
 
 | Time | Task | Output |
 | --- | --- | --- |
-| 07:30 | Morning news brief | Top headlines in my topics, LLM-summarized, ranked |
-| 08:00 | Weather + calendar | Today's forecast and agenda |
-| 13:00 | Markets / watchlist | Movers and one-line "why" |
-| 21:00 | Daily wrap | What I asked about today + anything I flagged for follow-up |
+| 07:00 | Email digest | Unread mail from the last 24h, grouped by sender, newsletters skipped, replies-needed flagged |
+| 07:30 | Morning news brief | Top items from the `news` + `tech` registry, refine-loop summarized and ranked |
+| 08:00 | Weather + agenda | Today's forecast (weather connector) |
+| 13:00 | Markets / watchlist | Movers from the `markets` registry + finance connector, one-line "why" each |
+| 21:00 | Daily wrap | What I asked about today, flagged follow-ups, anything new in `personal` |
 
 ## Roadmap
 
-- [ ] Pick language + one channel to build first (leaning: email or WhatsApp).
-- [ ] Core router with a stubbed LLM and one connector (RSS news).
-- [ ] LLM provider interface + local Ollama backend.
-- [ ] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and trace logging.
-- [ ] Summarize pipeline for the morning brief, run through the refine loop.
-- [ ] Scheduler wired to the active channel.
-- [ ] Add weather + finance connectors.
-- [ ] Persistence for history and preferences.
-- [ ] Playwright-based scraper for a couple of specific sites.
-- [ ] VPS deploy: systemd/Docker, log rotation, restart-on-failure.
-- [ ] Second channel adapter.
+- [ ] FastAPI skeleton + Telegram webhook echo.
+- [ ] PostgreSQL + pgvector via docker-compose; SQLAlchemy models + first Alembic migration.
+- [ ] LLM provider chain: Groq → Gemini → OpenRouter adapters, `llm_usage` tracking, Ollama fallback.
+- [ ] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and `loop_traces`.
+- [ ] Core router + intent detection (question / command / email-filter).
+- [ ] Email reader: IMAP connect, natural-language → IMAP search + LLM post-filter, summaries into `emails`.
+- [ ] Scraping: site registry loader, Playwright runner, `search_bar` + `url_template` modes, extractors.
+- [ ] Category/subcategory tagging + embeddings + dedup on `items`.
+- [ ] Scheduler CLI + cron entries for the example tasks.
+- [ ] Weather + finance + RSS connectors.
+- [ ] VPS deploy: nginx + TLS for the Telegram webhook, systemd, log rotation, restart-on-failure.
+- [ ] Instagram channel adapter.
 
 ## Development
 
 ```bash
-# clone, then:
-cp .env.example .env        # fill in keys
-# (setup steps depend on chosen runtime — TBD)
+uv sync                        # or: pip install -e .
+cp .env.example .env           # fill in Telegram token, LLM keys, IMAP creds, DB URL
+docker compose up -d db        # PostgreSQL + pgvector
+alembic upgrade head
+uvicorn bot.main:app --reload  # local API; use a tunnel for the Telegram webhook in dev
 ```
 
 ## Deployment (target)
 
-- Runs on a personal VPS, always-on.
-- Briefing jobs via `cron` or an in-process scheduler.
-- Restart-on-failure via `systemd` or the container runtime.
-- Config and secrets via a git-ignored `.env`; never committed.
+- Runs on a personal VPS, always-on. FastAPI under Uvicorn/Gunicorn behind **nginx** (TLS needed for the
+  Telegram webhook; `certbot` for the cert).
+- PostgreSQL local on the VPS (or a managed instance) with the pgvector extension.
+- Briefings via **system cron** calling `python -m bot.scheduler run <task>`.
+- `systemd` unit for the API service with restart-on-failure; logs rotated via `logrotate`.
+- Config and secrets in a git-ignored `.env`; never committed.
 
 ## Notes
 
-- Unofficial channel libraries (WhatsApp Web, `instagrapi`) can break or risk account limits — treat official APIs as the preferred path where feasible.
-- Respect target sites' terms and rate limits when scraping; cache aggressively.
+- Free-tier limits and model names change often — keep `llm.chain` and the per-provider caps in config, not code.
+- The Telegram webhook needs a public HTTPS endpoint; in dev use a tunnel (e.g. cloudflared) or long polling.
+- Scraping is limited to the locked registry; respect each site's `robots.txt` and terms, cache aggressively,
+  and rate-limit per site.
+- Email is read-first: the bot never sends, moves, or deletes a message without an explicit confirmation.
 - This README is the working spec and will change as decisions get made.

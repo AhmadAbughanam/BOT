@@ -1,0 +1,100 @@
+# Copy to config/sites.yaml. The locked scraping registry.
+#
+# The bot never crawls the open web. For a query it picks the sites whose
+# category/subcategory match, then for each site either:
+#   mode: url_template  -> requests the site's search URL directly ({query} is url-encoded)
+#   mode: search_bar    -> Playwright opens the on-page search control, types, submits
+# and scrapes result links via `result_selector`.
+#
+# Categories (top-level) and their subcategories:
+#   news     : world, mena, politics, economy
+#   tech     : ai, software, hardware, startups
+#   markets  : equities, crypto, commodities, macro
+#   science  : ai-research, space, health, climate
+#   learning : tutorials, docs, courses
+#   personal : jobs, realestate, deals
+
+defaults:
+  rate_limit_per_min: 10
+  cache_ttl_min: 60
+  respect_robots: true
+  max_results: 10
+
+sites:
+  # --- news ---
+  - id: reuters
+    name: Reuters
+    base_url: https://www.reuters.com
+    category: news
+    subcategory: world
+    search:
+      mode: search_bar
+      open_search_selector: "button[aria-label='Open search bar']"
+      input_selector: "input[name='query']"
+      submit_key: Enter
+      result_selector: "a[data-testid='TitleLink']"
+
+  - id: aljazeera
+    name: Al Jazeera
+    base_url: https://www.aljazeera.com
+    category: news
+    subcategory: mena
+    search:
+      mode: url_template
+      url_template: "https://www.aljazeera.com/search/{query}"
+      result_selector: "article a.u-clickable-card__link"
+
+  # --- tech ---
+  - id: hn
+    name: Hacker News (Algolia)
+    base_url: https://news.ycombinator.com
+    category: tech
+    subcategory: software
+    search:
+      mode: url_template
+      url_template: "https://hn.algolia.com/?q={query}&sort=byPopularity&type=story"
+      result_selector: "a.Story_link"
+
+  - id: techcrunch
+    name: TechCrunch
+    base_url: https://techcrunch.com
+    category: tech
+    subcategory: startups
+    search:
+      mode: url_template
+      url_template: "https://techcrunch.com/?s={query}"
+      result_selector: "a.loop-card__title-link"
+
+  - id: arxiv-ai
+    name: arXiv (cs.AI)
+    base_url: https://arxiv.org
+    category: science
+    subcategory: ai-research
+    search:
+      mode: url_template
+      url_template: "https://arxiv.org/find/all?query={query}&start=0"
+      result_selector: "p.list-title a"
+
+  # --- markets ---
+  - id: coindesk
+    name: CoinDesk
+    base_url: https://www.coindesk.com
+    category: markets
+    subcategory: crypto
+    search:
+      mode: search_bar
+      open_search_selector: "button[aria-label='Search']"
+      input_selector: "input[type='search']"
+      submit_key: Enter
+      result_selector: "a.card-title-link"
+
+  # --- learning ---
+  - id: devto
+    name: DEV Community
+    base_url: https://dev.to
+    category: learning
+    subcategory: tutorials
+    search:
+      mode: url_template
+      url_template: "https://dev.to/search?q={query}"
+      result_selector: "a.crayons-story__hidden-navigation-link"
