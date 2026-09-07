@@ -1,6 +1,20 @@
 # Copy to config/schedule.yaml. Times are local to the VPS (see TZ in .env).
 # Each task runs at the given time and pushes its output to the active channel.
 
+# Global default for the self-evaluating refine loop. Per-task `loop:` overrides these.
+defaults:
+  loop:
+    max_iterations: 3
+    score_threshold: 0.85          # 0..1; stop early once a draft scores at/above this
+    judge_model: null              # null = same model self-scores; set an id for LLM-as-judge
+    keep_traces: true              # persist every draft + score
+    criteria:
+      - grounded in the provided sources, no invented facts
+      - relevant to my stated interests
+      - correct dates and numbers
+      - no filler or hedging
+      - length fits the channel
+
 tasks:
   - name: morning-news
     at: "07:30"
@@ -10,7 +24,9 @@ tasks:
       topics: [technology, ai, jordan, world]
       max_items: 8
       summarize: true
-      rank: true
+    loop:
+      max_iterations: 4
+      score_threshold: 0.9
 
   - name: weather-agenda
     at: "08:00"
