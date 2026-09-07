@@ -1,0 +1,32 @@
+# Copy to config/schedule.yaml. Times are local to the VPS (see TZ in .env).
+# Each task runs at the given time and pushes its output to the active channel.
+
+tasks:
+  - name: morning-news
+    at: "07:30"
+    connector: news
+    action: brief
+    params:
+      topics: [technology, ai, jordan, world]
+      max_items: 8
+      summarize: true
+      rank: true
+
+  - name: weather-agenda
+    at: "08:00"
+    connector: weather
+    action: today
+    params:
+      location: "Amman, JO"
+
+  - name: markets
+    at: "13:00"
+    connector: finance
+    action: watchlist
+    params:
+      symbols: [AAPL, MSFT, BTC-USD]
+
+  - name: daily-wrap
+    at: "21:00"
+    connector: core
+    action: recap

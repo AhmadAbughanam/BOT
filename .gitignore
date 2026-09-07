@@ -1,0 +1,47 @@
+# Secrets / config
+.env
+.env.*
+!.env.example
+config/schedule.yaml
+*.key
+*.pem
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Data / runtime
+*.sqlite
+*.sqlite3
+*.db
+data/
+cache/
+logs/
+*.log
+
+# LLM / models
+models/
+*.gguf
+
+# Playwright / browsers
+.playwright/
+playwright-report/
+test-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
