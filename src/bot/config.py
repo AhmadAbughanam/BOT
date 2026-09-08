@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://bot:bot@localhost:5432/bot"
     embed_dim: int = 768
 
+    # email (read + filter the mailbox; also a delivery target)
+    email_imap_host: str = ""
+    email_imap_port: int = 993
+    email_imap_ssl: bool = True
+    email_smtp_host: str = ""
+    email_smtp_port: int = 587
+    email_address: str = ""
+    email_password: str = ""
+    email_brief_to: str = ""
+
     # telegram
     telegram_bot_token: str = ""
     telegram_allowed_user_ids: str = ""

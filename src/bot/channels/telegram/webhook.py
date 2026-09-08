@@ -8,30 +8,17 @@ from sqlalchemy.orm import Session
 
 from bot.channels.telegram.client import TelegramClient
 from bot.config import get_settings
-from bot.llm.chain import default_chain
-from bot.llm.loader import load_loop_defaults
-from bot.refine.loop import RefineConfig, refine
+from bot.core.formatting import for_telegram
+from bot.core.router import route
 from bot.storage.models import Message
 
 logger = logging.getLogger(__name__)
 
 Responder = Callable[[str, Session], Awaitable[str]]
 
-COMMANDS: dict[str, str] = {
-    "/start": "Hi. Send me a question and I'll answer after a self-review pass.",
-    "/help": "Just type a question. Commands: /start, /help.",
-}
-
 
 class Sender(Protocol):
     async def send_message(self, chat_id: int, text: str) -> None: ...
-
-
-async def default_respond(question: str, session: Session) -> str:
-    """Answer a free-text message via the LLM chain + refine loop."""
-    cfg = RefineConfig.from_mapping(load_loop_defaults())
-    result = await refine(question, default_chain(), cfg, task="chat", session=session)
-    return result.answer
 
 
 async def handle_update(
@@ -42,6 +29,8 @@ async def handle_update(
     respond: Responder | None = None,
 ) -> None:
     client = client or TelegramClient()
+    responder = respond or route
+
     message = update.get("message") or update.get("edited_message")
     if not message:
         return
@@ -59,11 +48,8 @@ async def handle_update(
 
     if not text:
         reply = "I can only handle text messages for now."
-    elif text.startswith("/"):
-        reply = COMMANDS.get(text.split()[0], "Unknown command. Try /help.")
     else:
-        responder = respond or default_respond
-        reply = await responder(text, session)
+        reply = for_telegram(await responder(text, session))
 
     await client.send_message(chat_id, reply)
     session.add(Message(chat_id=chat_id, user_id=user_id, role="bot", text=reply))
