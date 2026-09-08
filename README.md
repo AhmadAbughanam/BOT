@@ -273,10 +273,13 @@ delivered to Telegram unless it names another channel.
 - [x] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and `loop_traces`.
 - [x] Telegram handler answers free text via the chain + refine loop (`/start`, `/help` commands).
 
+**Phase 3 — router + email** (branch `phase-3-router-email`)
+
+- [x] Core router + intent detection (command / email / question) dispatching to canned replies, the email digest, or the refine loop.
+- [x] Email reader: read-only IMAP, natural-language → IMAP search + LLM post-filter, digest summary, headers persisted into `emails`.
+
 **Later**
 
-- [ ] Core router + intent detection (question / command / email-filter).
-- [ ] Email reader: IMAP connect, natural-language → IMAP search + LLM post-filter, summaries into `emails`.
 - [ ] Scraping: site registry loader, Playwright runner, `search_bar` + `url_template` modes, extractors.
 - [ ] Category/subcategory tagging + embeddings + dedup on `items`.
 - [ ] Scheduler CLI + cron entries for the example tasks.
@@ -315,6 +318,7 @@ and point `set_telegram_webhook.py` at the tunnel URL.
 
 - Free-tier limits and model names change often — keep `llm.chain` and the per-provider caps in config, not code.
 - `loop.judge_model` is parsed but not yet wired — the refine loop currently scores with the same provider chain.
+- The email reader currently works from message headers only (from / subject / date / message-id); body fetch and reply drafting are a later step.
 - The Telegram webhook needs a public HTTPS endpoint; in dev use a tunnel (e.g. cloudflared) or long polling.
 - Scraping is limited to the locked registry; respect each site's `robots.txt` and terms, cache aggressively,
   and rate-limit per site.

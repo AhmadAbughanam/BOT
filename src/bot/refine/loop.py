@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import dataclass, field
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from bot.jsonutil import extract_json
 from bot.llm.base import ChatMessage
 from bot.llm.chain import LLMChain
 from bot.refine.criteria import (
@@ -52,13 +51,9 @@ class RefineResult:
 
 
 def _parse_eval(text: str) -> tuple[float, str]:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
+    data = extract_json(text)
+    if not isinstance(data, dict):
         return 0.0, "eval response had no JSON object"
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return 0.0, "eval response was not valid JSON"
     try:
         score = float(data.get("score", 0.0))
     except (TypeError, ValueError):

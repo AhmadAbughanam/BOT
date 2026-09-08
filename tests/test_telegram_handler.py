@@ -23,7 +23,7 @@ def _update(text: str) -> dict:
     return {"message": {"chat": {"id": 42}, "from": {"id": 7}, "text": text}}
 
 
-async def test_free_text_goes_through_responder_and_persists_both_sides() -> None:
+async def test_text_goes_through_responder_and_persists_both_sides() -> None:
     client = FakeClient()
     session = FakeSession()
 
@@ -37,19 +37,24 @@ async def test_free_text_goes_through_responder_and_persists_both_sides() -> Non
     assert session.added[1].text == "answer to: what's up"
 
 
-async def test_commands_are_answered_without_calling_the_responder() -> None:
+async def test_reply_is_trimmed_to_telegram_limit() -> None:
     client = FakeClient()
     session = FakeSession()
-    called = False
 
     async def responder(question: str, _session) -> str:
-        nonlocal called
-        called = True
-        return "should not run"
+        return "x" * 5000
 
-    await handle_update(_update("/help"), session, client=client, respond=responder)
+    await handle_update(_update("long"), session, client=client, respond=responder)
 
-    assert called is False
+    assert len(client.sent[0][1]) == 4096
+
+
+async def test_slash_command_is_answered_via_default_route() -> None:
+    client = FakeClient()
+    session = FakeSession()
+
+    await handle_update(_update("/help"), session, client=client)
+
     assert "Commands" in client.sent[0][1]
 
 
