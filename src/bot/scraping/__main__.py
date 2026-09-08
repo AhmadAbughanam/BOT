@@ -1,7 +1,8 @@
-"""One-off scrape / registry sync.
+"""One-off scrape / registry sync / embedding backfill.
 
     python -m bot.scraping "openai" --categories tech,news
     python -m bot.scraping --mirror
+    python -m bot.scraping --embed-backfill
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--categories", default="", help="comma-separated category filter")
     parser.add_argument("--subcategories", default="", help="comma-separated subcategory filter")
     parser.add_argument("--mirror", action="store_true", help="sync config/sites.yaml into the sources table and exit")
+    parser.add_argument("--embed-backfill", action="store_true", help="embed all items with no embedding and exit")
     return parser.parse_args()
 
 
@@ -31,8 +33,20 @@ async def _run(args: argparse.Namespace) -> None:
             print(f"mirrored {count} site(s) into sources")
             return
 
+        if args.embed_backfill:
+            from bot.llm.embeddings import default_embedding_chain
+            from bot.storage.vectors import backfill_embeddings
+
+            chain = default_embedding_chain()
+            if chain is None:
+                raise SystemExit("no llm.embeddings configured in config/schedule.yaml")
+            count = await backfill_embeddings(session, chain)
+            session.commit()
+            print(f"embedded {count} item(s)")
+            return
+
         if not args.query:
-            raise SystemExit("a query is required unless --mirror is given")
+            raise SystemExit("a query is required unless --mirror / --embed-backfill is given")
 
         service = ScrapingService(sites=load_sites())
         items = await service.collect(
