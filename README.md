@@ -297,9 +297,14 @@ delivered to Telegram unless it names another channel.
 - [x] pgvector helpers (`storage/vectors.py`): cosine, nearest-neighbour, `has_semantic_duplicate`, `embed_and_store`, `backfill_embeddings`; HNSW cosine index (migration `0002`).
 - [x] `ScrapingService` embeds new `items` and drops near-duplicates (cosine ≤ `SEMANTIC_DEDUP_THRESHOLD`) against stored + in-batch vectors; best-effort, falls back to URL dedup. `python -m bot.scraping --embed-backfill`.
 
+**Phase 7 — VPS deploy** (branch `phase-7-vps-deploy`)
+
+- [x] `deploy/`: `bot-api` systemd unit (restart-on-failure), `bot-task@` oneshot, nginx + certbot config scoped to `/telegram/webhook`, cron file, logrotate, `deploy.sh` update script, runbook.
+- [x] `Dockerfile` (Playwright base) + `docker compose --profile full` runs the API container.
+- [x] File logging (`LOG_FILE`), `APP_ENV`, `/` version endpoint; `configure_logging()` shared by the app and both CLIs.
+
 **Later**
 
-- [ ] VPS deploy: nginx + TLS for the Telegram webhook, systemd, log rotation, restart-on-failure.
 - [ ] Instagram channel adapter.
 
 ## Development
@@ -322,14 +327,16 @@ python scripts/set_telegram_webhook.py https://your-host/telegram/webhook
 In local dev, expose the API with a tunnel (e.g. `cloudflared tunnel --url http://localhost:8000`)
 and point `set_telegram_webhook.py` at the tunnel URL.
 
-## Deployment (target)
+## Deployment
 
-- Runs on a personal VPS, always-on. FastAPI under Uvicorn/Gunicorn behind **nginx** (TLS needed for the
-  Telegram webhook; `certbot` for the cert).
-- PostgreSQL local on the VPS (or a managed instance) with the pgvector extension.
-- Briefings via **system cron** calling `python -m bot.scheduler run <task>`; generate the crontab with
-  `python -m bot.scheduler crontab --python /srv/bot/.venv/bin/python --workdir /srv/bot`.
-- `systemd` unit for the API service with restart-on-failure; logs rotated via `logrotate`.
+Full runbook in [`deploy/README.md`](deploy/README.md). In short, on a VPS with the repo at `/srv/bot`:
+
+- **API**: `deploy/systemd/bot-api.service` runs `uvicorn` on `127.0.0.1:8000` with `Restart=on-failure`.
+- **nginx + TLS**: `deploy/nginx/bot.conf` proxies only `/telegram/webhook` and `/health`; `certbot --nginx` for the cert.
+- **Briefings**: `deploy/cron/bot.cron` (regenerate with `python -m bot.scheduler crontab …`) → `crontab -u bot`.
+- **Logs**: set `LOG_FILE=/srv/bot/logs/bot.log`; `deploy/logrotate/bot` rotates it weekly.
+- **Updates**: `deploy/deploy.sh` — pull, reinstall, `alembic upgrade head`, re-mirror the registry, restart.
+- **Container route**: `docker compose --profile full up -d` builds the API from `Dockerfile` alongside Postgres.
 - Config and secrets in a git-ignored `.env`; never committed.
 
 ## Notes

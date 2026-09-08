@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from bot.logging_setup import configure_logging
 from bot.scheduler.config import load_tasks
 from bot.scheduler.crontab import crontab_lines
 from bot.scheduler.tasks import run_task
@@ -43,6 +44,7 @@ async def _run_one(task: str, deliver: bool) -> None:
 
 
 def main() -> None:
+    configure_logging()
     args = _parse_args()
 
     if args.cmd == "list":

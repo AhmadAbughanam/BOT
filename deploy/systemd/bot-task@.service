@@ -1,0 +1,14 @@
+# Run a single scheduled task: `systemctl start bot-task@morning-news`
+# Handy for one-off runs / debugging; routine scheduling uses cron (see deploy/cron/).
+[Unit]
+Description=BOT scheduled task %i
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=bot
+Group=bot
+WorkingDirectory=/srv/bot
+EnvironmentFile=/srv/bot/.env
+ExecStart=/srv/bot/.venv/bin/python -m bot.scheduler run %i
