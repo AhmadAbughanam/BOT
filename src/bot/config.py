@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_allowed_user_ids: str = ""
     telegram_webhook_secret: str = ""
+    telegram_default_chat_id: str = ""  # where scheduled briefings are delivered
 
     # llm providers (chain order lives in config/schedule.yaml -> llm.chain)
     groq_api_key: str = ""
@@ -54,6 +55,11 @@ class Settings(BaseSettings):
         if not raw:
             return set()
         return {int(part) for part in raw.split(",") if part.strip()}
+
+    @property
+    def default_chat_id(self) -> int | None:
+        raw = self.telegram_default_chat_id.strip()
+        return int(raw) if raw else None
 
 
 @lru_cache
