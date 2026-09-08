@@ -4,6 +4,7 @@
 !.env.example
 config/schedule.yaml
 config/sites.yaml
+instagram_session.json
 *.key
 *.pem
 secrets/

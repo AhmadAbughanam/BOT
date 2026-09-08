@@ -65,6 +65,16 @@ sudo -u bot .venv/bin/python -m bot.scheduler run weather-agenda   # smoke test 
 sudo cp deploy/logrotate/bot /etc/logrotate.d/bot     # rotates whatever LOG_FILE points at
 ```
 
+## 6. Instagram DM poller (optional)
+
+```bash
+sudo -u bot .venv/bin/pip install -e ".[instagram]"
+# add INSTAGRAM_USERNAME / INSTAGRAM_PASSWORD / INSTAGRAM_ALLOWED_USER_IDS to .env
+sudo -u bot .venv/bin/python -m bot.channels.instagram poll    # one pass; solves any login challenge interactively
+sudo cp deploy/systemd/bot-instagram.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now bot-instagram
+```
+
 ## Updating
 
 ```bash

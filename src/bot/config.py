@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://bot:bot@localhost:5432/bot"
     embed_dim: int = 768
 
+    # instagram (DM poller)
+    instagram_username: str = ""
+    instagram_password: str = ""
+    instagram_allowed_user_ids: str = ""
+    instagram_session_path: str = "instagram_session.json"
+    instagram_poll_interval: float = 60.0
+
     # email (read + filter the mailbox; also a delivery target)
     email_imap_host: str = ""
     email_imap_port: int = 993
@@ -63,6 +70,13 @@ class Settings(BaseSettings):
     def default_chat_id(self) -> int | None:
         raw = self.telegram_default_chat_id.strip()
         return int(raw) if raw else None
+
+    @property
+    def instagram_allowed_ids(self) -> set[int]:
+        raw = self.instagram_allowed_user_ids.strip()
+        if not raw:
+            return set()
+        return {int(part) for part in raw.split(",") if part.strip()}
 
 
 @lru_cache
