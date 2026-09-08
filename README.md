@@ -63,7 +63,17 @@ each task at a set time of day (news with breakfast, markets midday, a wrap-up i
 | --- | --- | --- |
 | **Telegram** | Primary. I send commands, get briefings and answers. | `python-telegram-bot` (or `aiogram`), webhook into FastAPI |
 | **Email** | Data source: read + filter my mailbox. Also a delivery target for briefings. | IMAP via `aioimaplib` / `imaplib`; SMTP for sending; Gmail API optional |
-| **Instagram** | Optional, later. | `instagrapi` |
+| **Instagram** | DM poller — reads new direct messages and answers through the same router. | `instagrapi` (optional extra) |
+
+### Instagram DM poller
+
+- Instagram has no webhook for personal accounts, so `python -m bot.channels.instagram poll [--loop]`
+  polls the DM inbox (systemd unit `bot-instagram.service` runs it continuously on the VPS).
+- Each new inbound message runs through `route()` exactly like a Telegram message; the reply is sent
+  back in the same thread, trimmed to 1000 chars.
+- A per-thread cursor in `channel_cursors` tracks the last processed message id so restarts don't
+  re-answer. Allowlist via `INSTAGRAM_ALLOWED_USER_IDS`; `instagrapi` session is cached to
+  `INSTAGRAM_SESSION_PATH`.
 
 ### Email access & filtering
 
@@ -303,9 +313,14 @@ delivered to Telegram unless it names another channel.
 - [x] `Dockerfile` (Playwright base) + `docker compose --profile full` runs the API container.
 - [x] File logging (`LOG_FILE`), `APP_ENV`, `/` version endpoint; `configure_logging()` shared by the app and both CLIs.
 
-**Later**
+**Phase 8 — Instagram** (branch `phase-8-instagram`)
 
-- [ ] Instagram channel adapter.
+- [x] `instagrapi` DM client (lazy import, optional `bot[instagram]` extra) + `poll_once()` that runs new
+      inbound messages through `route()` and replies in-thread.
+- [x] `channel_cursors` table (migration `0003`) tracks the last processed message id per thread; allowlist + session caching.
+- [x] `python -m bot.channels.instagram poll [--loop]` CLI and `bot-instagram.service` systemd unit.
+
+All roadmap items are built; further work is enhancements (email body fetch / reply drafting, `loop.judge_model`, more sites/connectors).
 
 ## Development
 

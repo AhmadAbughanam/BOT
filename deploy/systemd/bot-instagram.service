@@ -1,0 +1,23 @@
+[Unit]
+Description=BOT Instagram DM poller
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bot
+Group=bot
+WorkingDirectory=/srv/bot
+EnvironmentFile=/srv/bot/.env
+ExecStart=/srv/bot/.venv/bin/python -m bot.channels.instagram poll --loop
+Restart=on-failure
+RestartSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/bot
+
+[Install]
+WantedBy=multi-user.target

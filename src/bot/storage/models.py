@@ -130,6 +130,19 @@ class LoopTrace(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ChannelCursor(Base):
+    """Per-channel resume markers, e.g. the last Instagram DM processed in a thread."""
+
+    __tablename__ = "channel_cursors"
+
+    channel: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class LlmUsage(Base):
     """Per-provider request/token counters for free-tier limit tracking."""
 

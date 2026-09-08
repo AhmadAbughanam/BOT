@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = {
     "deploy/systemd/bot-api.service": ["ExecStart=", "Restart=on-failure", "bot.main:app"],
     "deploy/systemd/bot-task@.service": ["bot.scheduler run %i", "Type=oneshot"],
+    "deploy/systemd/bot-instagram.service": ["bot.channels.instagram poll --loop", "Restart=on-failure"],
     "deploy/nginx/bot.conf": ["/telegram/webhook", "proxy_pass", "listen 443 ssl"],
     "deploy/cron/bot.cron": ["bot.scheduler run email-digest", "bot.scheduler run daily-wrap"],
     "deploy/logrotate/bot": ["rotate", "copytruncate"],
