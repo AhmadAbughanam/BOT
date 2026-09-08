@@ -4,12 +4,14 @@ import httpx
 
 from bot.llm.base import ChatMessage, ChatResult, LLMError, RateLimitError
 
-_API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 _FALLTHROUGH_STATUS = {401, 403, 429}
 
 
-class GeminiProvider:
-    name = "gemini"
+class OpenAICompatProvider:
+    """Base for providers that speak the OpenAI /chat/completions shape (Groq, OpenRouter, Cerebras)."""
+
+    name = "openai-compat"
+    base_url = ""
 
     def __init__(self, api_key: str) -> None:
         self._key = api_key
@@ -25,27 +27,19 @@ class GeminiProvider:
         if not self._key:
             raise RateLimitError(f"{self.name}: no API key configured")
 
-        system_parts = [m.content for m in messages if m.role == "system"]
-        contents = [
-            {
-                "role": "model" if m.role == "assistant" else "user",
-                "parts": [{"text": m.content}],
-            }
-            for m in messages
-            if m.role != "system"
-        ]
-
-        payload: dict = {"contents": contents, "generationConfig": {"temperature": temperature}}
-        if system_parts:
-            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
+        payload: dict = {
+            "model": model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "temperature": temperature,
+        }
         if max_tokens:
-            payload["generationConfig"]["maxOutputTokens"] = max_tokens
+            payload["max_tokens"] = max_tokens
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"{_API_ROOT}/models/{model}:generateContent",
-                params={"key": self._key},
+                f"{self.base_url}/chat/completions",
                 json=payload,
+                headers={"Authorization": f"Bearer {self._key}"},
             )
 
         if resp.status_code in _FALLTHROUGH_STATUS:
@@ -55,15 +49,30 @@ class GeminiProvider:
 
         data = resp.json()
         try:
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError) as exc:
+            text = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
             raise LLMError(f"{self.name}: unexpected response shape: {data}") from exc
 
-        usage = data.get("usageMetadata") or {}
+        usage = data.get("usage") or {}
         return ChatResult(
             text=text,
             provider=self.name,
             model=model,
-            tokens_in=usage.get("promptTokenCount", 0),
-            tokens_out=usage.get("candidatesTokenCount", 0),
+            tokens_in=usage.get("prompt_tokens", 0),
+            tokens_out=usage.get("completion_tokens", 0),
         )
+
+
+class GroqProvider(OpenAICompatProvider):
+    name = "groq"
+    base_url = "https://api.groq.com/openai/v1"
+
+
+class OpenRouterProvider(OpenAICompatProvider):
+    name = "openrouter"
+    base_url = "https://openrouter.ai/api/v1"
+
+
+class CerebrasProvider(OpenAICompatProvider):
+    name = "cerebras"
+    base_url = "https://api.cerebras.ai/v1"
