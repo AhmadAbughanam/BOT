@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     telegram_allowed_user_ids: str = ""
     telegram_webhook_secret: str = ""
 
+    # llm providers (chain order lives in config/schedule.yaml -> llm.chain)
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
+    openrouter_api_key: str = ""
+    cerebras_api_key: str = ""
+    ollama_host: str = "http://localhost:11434"
+    ollama_chat_model: str = "llama3.1:8b"
+
+    # where the llm.chain / defaults.loop config is read from
+    llm_config_path: str = ""
+
     @property
     def allowed_user_ids(self) -> set[int]:
         raw = self.telegram_allowed_user_ids.strip()

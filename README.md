@@ -267,10 +267,14 @@ delivered to Telegram unless it names another channel.
 - [x] FastAPI skeleton + Telegram webhook echo.
 - [x] PostgreSQL + pgvector via docker-compose; SQLAlchemy models + first Alembic migration.
 
+**Phase 2 — LLM layer + refine loop** (branch `phase-2-llm-refine`)
+
+- [x] LLM provider chain: Groq → Gemini → OpenRouter adapters, `llm_usage` tracking, Ollama fallback.
+- [x] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and `loop_traces`.
+- [x] Telegram handler answers free text via the chain + refine loop (`/start`, `/help` commands).
+
 **Later**
 
-- [ ] LLM provider chain: Groq → Gemini → OpenRouter adapters, `llm_usage` tracking, Ollama fallback.
-- [ ] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and `loop_traces`.
 - [ ] Core router + intent detection (question / command / email-filter).
 - [ ] Email reader: IMAP connect, natural-language → IMAP search + LLM post-filter, summaries into `emails`.
 - [ ] Scraping: site registry loader, Playwright runner, `search_bar` + `url_template` modes, extractors.
@@ -310,6 +314,7 @@ and point `set_telegram_webhook.py` at the tunnel URL.
 ## Notes
 
 - Free-tier limits and model names change often — keep `llm.chain` and the per-provider caps in config, not code.
+- `loop.judge_model` is parsed but not yet wired — the refine loop currently scores with the same provider chain.
 - The Telegram webhook needs a public HTTPS endpoint; in dev use a tunnel (e.g. cloudflared) or long polling.
 - Scraping is limited to the locked registry; respect each site's `robots.txt` and terms, cache aggressively,
   and rate-limit per site.
