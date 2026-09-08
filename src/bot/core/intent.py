@@ -10,7 +10,9 @@ from bot.llm.chain import LLMChain
 
 logger = logging.getLogger(__name__)
 
-IntentKind = Literal["command", "email", "question"]
+IntentKind = Literal["command", "email", "search", "question"]
+
+_MODEL_KINDS = ("email", "search", "question")
 
 
 @dataclass
@@ -21,9 +23,11 @@ class Intent:
 
 _PROMPT = (
     "Classify the user message. Reply with ONLY JSON: "
-    '{"kind": "email" or "question", "query": "<the mail request, or null>"}\n'
-    '"email" = the user wants to read, search, filter, or summarize their mailbox / inbox.\n'
-    '"question" = anything else.\n\n'
+    '{"kind": "email" or "search" or "question", "query": "<the request, or null>"}\n'
+    '"email"    = the user wants to read, filter, or summarize their mailbox / inbox.\n'
+    '"search"   = the user wants current news or up-to-date info on a topic '
+    '(headlines, "latest on X", "what happened with Y").\n'
+    '"question" = anything else (general knowledge, advice, chit-chat).\n\n'
     "MESSAGE:\n"
 )
 
@@ -35,7 +39,7 @@ async def classify_intent(text: str, chain: LLMChain) -> Intent:
 
     result = await chain.chat([ChatMessage("user", _PROMPT + text)], temperature=0.0)
     data = extract_json(result.text)
-    if not isinstance(data, dict) or data.get("kind") not in ("email", "question"):
+    if not isinstance(data, dict) or data.get("kind") not in _MODEL_KINDS:
         logger.info("intent classification unclear, defaulting to question: %r", result.text[:120])
         return Intent(kind="question")
 

@@ -28,6 +28,13 @@ async def test_email_intent_carries_the_query() -> None:
     assert intent.query == "unread from bob"
 
 
+async def test_search_intent_is_recognized() -> None:
+    chain = OneShotChain('{"kind": "search", "query": "latest on mars rover"}')
+    intent = await classify_intent("what's the latest on the mars rover?", chain)
+    assert intent.kind == "search"
+    assert intent.query == "latest on mars rover"
+
+
 async def test_unparseable_classification_defaults_to_question() -> None:
     chain = OneShotChain("no json here")
     intent = await classify_intent("what is the capital of France", chain)
