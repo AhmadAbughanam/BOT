@@ -9,14 +9,16 @@ from bot.core.intent import classify_intent
 from bot.llm.chain import LLMChain, default_chain
 from bot.llm.loader import load_loop_defaults
 from bot.refine.loop import RefineConfig, refine
+from bot.scraping.service import ScrapingService
 
 logger = logging.getLogger(__name__)
 
 COMMANDS: dict[str, str] = {
-    "/start": "Hi. Send me a question, or ask me to check your mail.",
+    "/start": "Hi. Send me a question, ask about your mail, or ask for the latest on a topic.",
     "/help": (
         "Type a question and I'll answer after a self-review pass. "
-        "Or ask about your inbox, e.g. \"summarize unread mail from the last day, skip newsletters\". "
+        'Ask about your inbox ("summarize unread mail, skip newsletters"), '
+        'or ask for current news ("latest on the EU AI act"). '
         "Commands: /start, /help."
     ),
 }
@@ -28,8 +30,9 @@ async def route(
     *,
     chain: LLMChain | None = None,
     email_service: EmailService | None = None,
+    scraping_service: ScrapingService | None = None,
 ) -> str:
-    """Detect intent and dispatch: command -> canned, email -> digest, question -> refine loop."""
+    """Detect intent and dispatch: command, email digest, registry search, or the refine loop."""
     text = text.strip()
     if text.startswith("/"):
         return COMMANDS.get(text.split()[0], "Unknown command. Try /help.")
@@ -43,5 +46,15 @@ async def route(
         return await service.digest(intent.query or text, session)
 
     cfg = RefineConfig.from_mapping(load_loop_defaults())
+
+    if intent.kind == "search":
+        service = scraping_service or ScrapingService()
+        items = await service.collect(intent.query or text, session)
+        if not items:
+            return "Nothing found in the locked site registry for that."
+        context = "\n".join(f"- {it.title} ({it.url})" for it in items)
+        result = await refine(text, chain, cfg, context=context, task="search", session=session)
+        return result.answer
+
     result = await refine(text, chain, cfg, task="chat", session=session)
     return result.answer

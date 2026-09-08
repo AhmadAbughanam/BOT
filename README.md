@@ -278,10 +278,16 @@ delivered to Telegram unless it names another channel.
 - [x] Core router + intent detection (command / email / question) dispatching to canned replies, the email digest, or the refine loop.
 - [x] Email reader: read-only IMAP, natural-language → IMAP search + LLM post-filter, digest summary, headers persisted into `emails`.
 
+**Phase 4 — scraping** (branch `phase-4-scraping`)
+
+- [x] Locked site registry loader (`config/sites.yaml`), `mirror_to_db` into `sources`, category/subcategory filtering.
+- [x] Playwright runner with `url_template` and `search_bar` modes (lazy import; injectable for tests), result extractors + URL dedup.
+- [x] `ScrapingService.collect` persists new `items` tagged with category/subcategory/source; `python -m bot.scraping` CLI.
+- [x] New `search` intent — Telegram "latest on X" scrapes the registry and answers via the refine loop grounded in the results.
+
 **Later**
 
-- [ ] Scraping: site registry loader, Playwright runner, `search_bar` + `url_template` modes, extractors.
-- [ ] Category/subcategory tagging + embeddings + dedup on `items`.
+- [ ] `items` embeddings + semantic dedup (needs a provider embedding endpoint).
 - [ ] Scheduler CLI + cron entries for the example tasks.
 - [ ] Weather + finance + RSS connectors.
 - [ ] VPS deploy: nginx + TLS for the Telegram webhook, systemd, log rotation, restart-on-failure.
@@ -291,12 +297,14 @@ delivered to Telegram unless it names another channel.
 
 ```bash
 pip install -e ".[dev]"                 # or: uv sync
+playwright install chromium             # browser for the scraping runner
 cp .env.example .env                    # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, DATABASE_URL
 docker compose up -d db                 # PostgreSQL + pgvector
 alembic upgrade head                    # create the schema (enables the vector extension)
+python -m bot.scraping --mirror         # sync config/sites.yaml into the sources table
 uvicorn bot.main:app --app-dir src --reload
 
-pytest                                  # health + echo tests (no DB needed)
+pytest                                  # unit tests (no DB or browser needed)
 
 # register the webhook once the API is reachable over HTTPS:
 python scripts/set_telegram_webhook.py https://your-host/telegram/webhook

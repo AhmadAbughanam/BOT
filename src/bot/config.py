@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # where the llm.chain / defaults.loop config is read from
     llm_config_path: str = ""
 
+    # scraping
+    playwright_headless: bool = True
+    scrape_timeout_ms: int = 15000
+    scrape_per_site_delay: float = 1.0
+    scrape_cache_ttl_min: int = 60
+
     @property
     def allowed_user_ids(self) -> set[int]:
         raw = self.telegram_allowed_user_ids.strip()

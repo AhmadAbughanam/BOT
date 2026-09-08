@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from bot.core.router import route
 from bot.llm.base import ChatResult
+from bot.storage.models import Item
 
 
 class ScriptedChain:
@@ -21,6 +22,16 @@ class FakeEmailService:
         return "DIGEST"
 
 
+class FakeScrapingService:
+    def __init__(self, items: list[Item]) -> None:
+        self._items = items
+        self.calls: list[str] = []
+
+    async def collect(self, query: str, session, **kwargs) -> list[Item]:
+        self.calls.append(query)
+        return self._items
+
+
 async def test_command_is_answered_without_the_model() -> None:
     reply = await route("/start", session=None, chain=ScriptedChain([]))
     assert reply.startswith("Hi.")
@@ -34,6 +45,31 @@ async def test_email_intent_dispatches_to_the_email_service() -> None:
 
     assert reply == "DIGEST"
     assert svc.calls == ["unread today"]
+
+
+async def test_search_intent_scrapes_then_summarizes_with_context() -> None:
+    chain = ScriptedChain(
+        [
+            '{"kind": "search", "query": "eu ai act"}',
+            "The EU AI Act entered into force in 2024.",
+            '{"score": 0.95, "critique": "grounded"}',
+        ]
+    )
+    svc = FakeScrapingService([Item(title="EU AI Act explainer", url="https://x.example/ai-act")])
+
+    reply = await route("latest on the eu ai act", session=None, chain=chain, scraping_service=svc)
+
+    assert reply == "The EU AI Act entered into force in 2024."
+    assert svc.calls == ["eu ai act"]
+
+
+async def test_search_intent_with_no_results_reports_empty_registry() -> None:
+    chain = ScriptedChain(['{"kind": "search", "query": "obscure thing"}'])
+    svc = FakeScrapingService([])
+
+    reply = await route("latest on obscure thing", session=None, chain=chain, scraping_service=svc)
+
+    assert "locked site registry" in reply
 
 
 async def test_question_intent_runs_the_refine_loop() -> None:
