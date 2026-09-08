@@ -285,11 +285,15 @@ delivered to Telegram unless it names another channel.
 - [x] `ScrapingService.collect` persists new `items` tagged with category/subcategory/source; `python -m bot.scraping` CLI.
 - [x] New `search` intent — Telegram "latest on X" scrapes the registry and answers via the refine loop grounded in the results.
 
+**Phase 5 — scheduler + connectors** (branch `phase-5-scheduler-connectors`)
+
+- [x] Connectors: `weather` (Open-Meteo, keyless), `finance` (Stooq + CoinGecko, keyless), `feeds` (RSS via feedparser) — each with an injectable HTTP getter.
+- [x] Scheduler: `run_task` dispatches by `source` (email / scraping / connector / core-recap), persists a `Brief`, delivers to `TELEGRAM_DEFAULT_CHAT_ID`.
+- [x] `python -m bot.scheduler` CLI — `list`, `run <task> [--no-deliver]`, `crontab` (renders one cron line per timed task).
+
 **Later**
 
 - [ ] `items` embeddings + semantic dedup (needs a provider embedding endpoint).
-- [ ] Scheduler CLI + cron entries for the example tasks.
-- [ ] Weather + finance + RSS connectors.
 - [ ] VPS deploy: nginx + TLS for the Telegram webhook, systemd, log rotation, restart-on-failure.
 - [ ] Instagram channel adapter.
 
@@ -318,7 +322,8 @@ and point `set_telegram_webhook.py` at the tunnel URL.
 - Runs on a personal VPS, always-on. FastAPI under Uvicorn/Gunicorn behind **nginx** (TLS needed for the
   Telegram webhook; `certbot` for the cert).
 - PostgreSQL local on the VPS (or a managed instance) with the pgvector extension.
-- Briefings via **system cron** calling `python -m bot.scheduler run <task>`.
+- Briefings via **system cron** calling `python -m bot.scheduler run <task>`; generate the crontab with
+  `python -m bot.scheduler crontab --python /srv/bot/.venv/bin/python --workdir /srv/bot`.
 - `systemd` unit for the API service with restart-on-failure; logs rotated via `logrotate`.
 - Config and secrets in a git-ignored `.env`; never committed.
 

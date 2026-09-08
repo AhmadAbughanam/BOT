@@ -13,6 +13,7 @@ dependencies = [
     "alembic>=1.13",
     "PyYAML>=6.0",
     "playwright>=1.47",
+    "feedparser>=6.0",
 ]
 
 [project.optional-dependencies]

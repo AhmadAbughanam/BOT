@@ -72,13 +72,22 @@ tasks:
 
   - name: markets
     at: "13:00"
-    source: scraping
-    action: brief
+    source: connector
+    connector: finance
+    action: watchlist
     params:
-      categories: [markets]
-      subcategories: [equities, crypto, macro]
-      watchlist: [AAPL, MSFT, BTC-USD]
-      max_items: 6
+      symbols: [AAPL, MSFT, BTC-USD]
+
+  - name: tech-feeds
+    at: "18:00"
+    source: connector
+    connector: feeds
+    action: latest
+    params:
+      max_items: 10
+      feeds:
+        - https://hnrss.org/frontpage
+        - https://www.theverge.com/rss/index.xml
 
   - name: daily-wrap
     at: "21:00"
