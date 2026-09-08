@@ -6,14 +6,21 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from bot import __version__
 from bot.channels.telegram.webhook import handle_update
 from bot.config import get_settings
+from bot.logging_setup import configure_logging
 from bot.storage.db import get_session
 
-logging.basicConfig(level=get_settings().log_level.upper())
+configure_logging()
 logger = logging.getLogger("bot")
 
-app = FastAPI(title="BOT", version="0.1.0")
+app = FastAPI(title="BOT", version=__version__)
+
+
+@app.get("/")
+def root() -> dict:
+    return {"name": "BOT", "version": __version__, "env": get_settings().app_env}
 
 
 @app.get("/health")

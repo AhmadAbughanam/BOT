@@ -1,0 +1,24 @@
+[Unit]
+Description=BOT FastAPI service (Telegram webhook + API)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bot
+Group=bot
+WorkingDirectory=/srv/bot
+EnvironmentFile=/srv/bot/.env
+ExecStart=/srv/bot/.venv/bin/uvicorn bot.main:app --app-dir src --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/bot/logs
+
+[Install]
+WantedBy=multi-user.target

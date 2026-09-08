@@ -1,0 +1,13 @@
+# BOT scheduled briefings.  Regenerate after editing config/schedule.yaml with:
+#   python -m bot.scheduler crontab --python /srv/bot/.venv/bin/python --workdir /srv/bot
+# Install:  crontab -u bot deploy/cron/bot.cron
+#
+# Times are in the crontab's timezone. Set it at the top so it matches TZ in .env:
+CRON_TZ=Asia/Amman
+
+0 7  * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run email-digest
+30 7 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run morning-news
+0 8  * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run weather-agenda
+0 13 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run markets
+0 18 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run tech-feeds
+0 21 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run daily-wrap

@@ -10,7 +10,9 @@ class Settings(BaseSettings):
 
     # runtime
     tz: str = "UTC"
+    app_env: str = "dev"  # dev | prod
     log_level: str = "info"
+    log_file: str = ""  # when set, logs also go to this file (for logrotate)
 
     # database
     database_url: str = "postgresql+psycopg://bot:bot@localhost:5432/bot"

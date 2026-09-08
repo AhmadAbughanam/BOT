@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from bot.logging_setup import configure_logging
 from bot.scraping.registry import load_sites, mirror_to_db
 from bot.scraping.service import ScrapingService
 from bot.storage.db import SessionLocal
@@ -64,4 +65,5 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    configure_logging()
     asyncio.run(_run(_parse_args()))

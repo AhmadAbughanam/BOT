@@ -1,0 +1,10 @@
+# /etc/logrotate.d/bot  — rotates the file that LOG_FILE points to
+/srv/bot/logs/*.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

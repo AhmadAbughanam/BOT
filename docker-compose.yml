@@ -15,5 +15,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # `docker compose --profile full up` also runs the API container.
+  api:
+    profiles: ["full"]
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://bot:bot@db:5432/bot
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m bot.scraping --mirror &&
+             uvicorn bot.main:app --app-dir src --host 0.0.0.0 --port 8000"
+
 volumes:
   pgdata:

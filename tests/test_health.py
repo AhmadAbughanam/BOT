@@ -22,3 +22,13 @@ def test_health_ok() -> None:
     body = resp.json()
     assert body["status"] == "ok"
     assert body["db"] is True
+
+
+def test_root_reports_name_and_version() -> None:
+    from bot import __version__
+
+    resp = TestClient(app).get("/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "BOT"
+    assert body["version"] == __version__
