@@ -262,8 +262,13 @@ delivered to Telegram unless it names another channel.
 
 ## Roadmap
 
-- [ ] FastAPI skeleton + Telegram webhook echo.
-- [ ] PostgreSQL + pgvector via docker-compose; SQLAlchemy models + first Alembic migration.
+**Phase 1 — foundation** (branch `phase-1-foundation`)
+
+- [x] FastAPI skeleton + Telegram webhook echo.
+- [x] PostgreSQL + pgvector via docker-compose; SQLAlchemy models + first Alembic migration.
+
+**Later**
+
 - [ ] LLM provider chain: Groq → Gemini → OpenRouter adapters, `llm_usage` tracking, Ollama fallback.
 - [ ] Refine loop: draft → self-eval/score → revise → pick best, with config knobs and `loop_traces`.
 - [ ] Core router + intent detection (question / command / email-filter).
@@ -278,12 +283,20 @@ delivered to Telegram unless it names another channel.
 ## Development
 
 ```bash
-uv sync                        # or: pip install -e .
-cp .env.example .env           # fill in Telegram token, LLM keys, IMAP creds, DB URL
-docker compose up -d db        # PostgreSQL + pgvector
-alembic upgrade head
-uvicorn bot.main:app --reload  # local API; use a tunnel for the Telegram webhook in dev
+pip install -e ".[dev]"                 # or: uv sync
+cp .env.example .env                    # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, DATABASE_URL
+docker compose up -d db                 # PostgreSQL + pgvector
+alembic upgrade head                    # create the schema (enables the vector extension)
+uvicorn bot.main:app --app-dir src --reload
+
+pytest                                  # health + echo tests (no DB needed)
+
+# register the webhook once the API is reachable over HTTPS:
+python scripts/set_telegram_webhook.py https://your-host/telegram/webhook
 ```
+
+In local dev, expose the API with a tunnel (e.g. `cloudflared tunnel --url http://localhost:8000`)
+and point `set_telegram_webhook.py` at the tunnel URL.
 
 ## Deployment (target)
 
