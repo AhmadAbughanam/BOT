@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     scrape_timeout_ms: int = 15000
     scrape_per_site_delay: float = 1.0
     scrape_cache_ttl_min: int = 60
+    semantic_dedup_threshold: float = 0.08  # cosine distance <= this counts as a duplicate
 
     @property
     def allowed_user_ids(self) -> set[int]:

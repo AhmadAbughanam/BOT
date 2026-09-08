@@ -9,7 +9,7 @@ from bot.core.intent import classify_intent
 from bot.llm.chain import LLMChain, default_chain
 from bot.llm.loader import load_loop_defaults
 from bot.refine.loop import RefineConfig, refine
-from bot.scraping.service import ScrapingService
+from bot.scraping.service import ScrapingService, default_scraping_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ async def route(
     cfg = RefineConfig.from_mapping(load_loop_defaults())
 
     if intent.kind == "search":
-        service = scraping_service or ScrapingService()
+        service = scraping_service or default_scraping_service()
         items = await service.collect(intent.query or text, session)
         if not items:
             return "Nothing found in the locked site registry for that."

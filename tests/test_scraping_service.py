@@ -39,8 +39,28 @@ class FakeSession:
     def add(self, obj) -> None:
         self.added.append(obj)
 
+    def flush(self) -> None:
+        for i, obj in enumerate(self.added, start=1):
+            if getattr(obj, "id", None) is None:
+                obj.id = i
+
     def execute(self, _stmt):
         return FakeScalars(self._known)
+
+
+class FakeEmbeddingChain:
+    def __init__(self) -> None:
+        self.embed_calls: list[list[str]] = []
+
+    async def embed(self, texts):
+        from bot.llm.base import EmbeddingResult
+
+        self.embed_calls.append(texts)
+        return EmbeddingResult(
+            vectors=[[float(i), 0.0] for i in range(len(texts))],
+            provider="fake",
+            model="fake-embed",
+        )
 
 
 def _result(sid: str, url: str) -> ScrapedResult:
@@ -69,6 +89,35 @@ async def test_collect_dedupes_and_persists_only_new_items() -> None:
 async def test_collect_returns_empty_when_no_sites_match() -> None:
     service = ScrapingService(runner=FakeRunner({}), sites=[_site("a", "tech", "ai")])
     assert await service.collect("q", FakeSession(), categories=["news"]) == []
+
+
+async def test_embedding_chain_drops_semantic_duplicates_and_embeds_survivors(monkeypatch) -> None:
+    # first candidate looks like an existing item; second is new
+    calls: list[list[float]] = []
+
+    def fake_has_dup(session, vector, threshold):
+        calls.append(vector)
+        return vector == [0.0, 0.0]  # only the first scraped result
+
+    monkeypatch.setattr("bot.scraping.service.has_semantic_duplicate", fake_has_dup)
+
+    sites = [_site("a", "tech", "ai")]
+    runner = FakeRunner(
+        {"a": [_result("a", "https://x.example/1"), _result("a", "https://x.example/2")]}
+    )
+    embed = FakeEmbeddingChain()
+    session = FakeSession()
+
+    new_items = await ScrapingService(runner=runner, sites=sites, embedding_chain=embed).collect(
+        "q", session, categories=["tech"]
+    )
+
+    assert [i.url for i in new_items] == ["https://x.example/2"]
+    # one embed call for the semantic filter, one for storing the survivor
+    assert len(embed.embed_calls) == 2
+    from bot.storage.models import ItemEmbedding
+
+    assert any(isinstance(o, ItemEmbedding) for o in session.added)
 
 
 async def test_one_failing_site_does_not_abort_the_batch() -> None:

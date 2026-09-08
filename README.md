@@ -291,9 +291,14 @@ delivered to Telegram unless it names another channel.
 - [x] Scheduler: `run_task` dispatches by `source` (email / scraping / connector / core-recap), persists a `Brief`, delivers to `TELEGRAM_DEFAULT_CHAT_ID`.
 - [x] `python -m bot.scheduler` CLI — `list`, `run <task> [--no-deliver]`, `crontab` (renders one cron line per timed task).
 
+**Phase 6 — embeddings + semantic dedup** (branch `phase-6-embeddings`)
+
+- [x] `embed` on the Gemini / Ollama / OpenAI-compatible providers; `EmbeddingChain` reads `llm.embeddings` and falls through like the chat chain.
+- [x] pgvector helpers (`storage/vectors.py`): cosine, nearest-neighbour, `has_semantic_duplicate`, `embed_and_store`, `backfill_embeddings`; HNSW cosine index (migration `0002`).
+- [x] `ScrapingService` embeds new `items` and drops near-duplicates (cosine ≤ `SEMANTIC_DEDUP_THRESHOLD`) against stored + in-batch vectors; best-effort, falls back to URL dedup. `python -m bot.scraping --embed-backfill`.
+
 **Later**
 
-- [ ] `items` embeddings + semantic dedup (needs a provider embedding endpoint).
 - [ ] VPS deploy: nginx + TLS for the Telegram webhook, systemd, log rotation, restart-on-failure.
 - [ ] Instagram channel adapter.
 
@@ -336,4 +341,5 @@ and point `set_telegram_webhook.py` at the tunnel URL.
 - Scraping is limited to the locked registry; respect each site's `robots.txt` and terms, cache aggressively,
   and rate-limit per site.
 - Email is read-first: the bot never sends, moves, or deletes a message without an explicit confirmation.
+- Embeddings and semantic dedup are best-effort — if no embedding provider is reachable, scraping falls back to plain URL dedup and stores items unembedded (run `--embed-backfill` later).
 - This README is the working spec and will change as decisions get made.

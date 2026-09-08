@@ -19,6 +19,14 @@ class ChatResult:
     tokens_out: int = 0
 
 
+@dataclass
+class EmbeddingResult:
+    vectors: list[list[float]]
+    provider: str
+    model: str
+    tokens: int = 0
+
+
 class LLMError(Exception):
     """Any provider failure."""
 
@@ -41,3 +49,9 @@ class LLMProvider(Protocol):
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> ChatResult: ...
+
+
+class EmbeddingProvider(Protocol):
+    name: str
+
+    async def embed(self, texts: list[str], model: str) -> EmbeddingResult: ...

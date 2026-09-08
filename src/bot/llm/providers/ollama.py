@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from bot.llm.base import ChatMessage, ChatResult, LLMError
+from bot.llm.base import ChatMessage, ChatResult, EmbeddingResult, LLMError
 
 
 class OllamaProvider:
@@ -54,4 +54,30 @@ class OllamaProvider:
             model=model,
             tokens_in=data.get("prompt_eval_count", 0),
             tokens_out=data.get("eval_count", 0),
+        )
+
+    async def embed(self, texts: list[str], model: str) -> EmbeddingResult:
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(
+                    f"{self._host}/api/embed",
+                    json={"model": model, "input": texts},
+                )
+        except httpx.HTTPError as exc:
+            raise LLMError(f"{self.name}: {exc}") from exc
+
+        if resp.status_code >= 400:
+            raise LLMError(f"{self.name}: HTTP {resp.status_code} {resp.text[:200]}")
+
+        data = resp.json()
+        try:
+            vectors = data["embeddings"]
+        except KeyError as exc:
+            raise LLMError(f"{self.name}: unexpected embeddings response: {data}") from exc
+
+        return EmbeddingResult(
+            vectors=vectors,
+            provider=self.name,
+            model=model,
+            tokens=data.get("prompt_eval_count", 0),
         )

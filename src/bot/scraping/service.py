@@ -6,10 +6,13 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bot.config import get_settings
+from bot.llm.embeddings import EmbeddingChain
 from bot.scraping.extractors import ScrapedResult, dedup_by_url
 from bot.scraping.registry import Site, load_sites, sites_for
 from bot.scraping.runner import BrowserRunner, default_runner
 from bot.storage.models import Item
+from bot.storage.vectors import cosine, embed_and_store, has_semantic_duplicate
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +24,12 @@ class ScrapingService:
         self,
         runner: BrowserRunner | None = None,
         sites: list[Site] | None = None,
+        embedding_chain: EmbeddingChain | None = None,
     ) -> None:
         self._runner = runner or default_runner()
         self._sites = sites if sites is not None else load_sites()
+        self._embeddings = embedding_chain
+        self._threshold = get_settings().semantic_dedup_threshold
 
     async def collect(
         self,
@@ -34,10 +40,8 @@ class ScrapingService:
         subcategories: Iterable[str] | None = None,
         per_site_limit: int = _PER_SITE_LIMIT,
     ) -> list[Item]:
-        """Search the matching locked sites for `query`, dedup, and persist new `items`.
-
-        Returns only the rows that were newly inserted.
-        """
+        """Search matching sites, drop URL and (if configured) semantic duplicates,
+        persist the survivors as `items`, and embed them. Returns the new rows."""
         targets = sites_for(self._sites, categories, subcategories)
         if not targets:
             logger.info("no registry sites match categories=%s subcategories=%s", categories, subcategories)
@@ -50,7 +54,39 @@ class ScrapingService:
             except Exception as exc:  # noqa: BLE001 - one bad site must not kill the batch
                 logger.warning("scrape failed for %s: %s", site.id, exc)
 
-        return _persist_new(session, dedup_by_url(scraped))
+        scraped = dedup_by_url(scraped)
+        if self._embeddings is not None and scraped:
+            try:
+                scraped = await self._semantic_filter(session, scraped)
+            except Exception as exc:  # noqa: BLE001 - best effort
+                logger.warning("semantic dedup skipped: %s", exc)
+
+        new_items = _persist_new(session, scraped)
+
+        if self._embeddings is not None and new_items:
+            try:
+                session.flush()
+                await embed_and_store(session, new_items, self._embeddings)
+            except Exception as exc:  # noqa: BLE001 - best effort
+                logger.warning("embedding new items failed: %s", exc)
+
+        return new_items
+
+    async def _semantic_filter(
+        self, session: Session, scraped: list[ScrapedResult]
+    ) -> list[ScrapedResult]:
+        result = await self._embeddings.embed([r.title or r.url for r in scraped])
+        near = 1.0 - self._threshold
+        kept: list[ScrapedResult] = []
+        kept_vectors: list[list[float]] = []
+        for item, vector in zip(scraped, result.vectors):
+            if has_semantic_duplicate(session, vector, self._threshold):
+                continue
+            if any(cosine(vector, seen) >= near for seen in kept_vectors):
+                continue
+            kept.append(item)
+            kept_vectors.append(vector)
+        return kept
 
 
 def _persist_new(session: Session, results: list[ScrapedResult]) -> list[Item]:
@@ -74,3 +110,10 @@ def _persist_new(session: Session, results: list[ScrapedResult]) -> list[Item]:
         session.add(item)
         new_items.append(item)
     return new_items
+
+
+def default_scraping_service() -> ScrapingService:
+    """ScrapingService wired with the configured embedding chain (if any)."""
+    from bot.llm.embeddings import default_embedding_chain
+
+    return ScrapingService(embedding_chain=default_embedding_chain())

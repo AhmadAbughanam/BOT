@@ -17,7 +17,7 @@ from bot.llm.chain import LLMChain, default_chain
 from bot.llm.loader import load_loop_defaults
 from bot.refine.loop import RefineConfig, refine
 from bot.scheduler.config import load_task
-from bot.scraping.service import ScrapingService
+from bot.scraping.service import ScrapingService, default_scraping_service
 from bot.storage.models import Brief, Message
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class TaskDeps:
         return cls(
             chain=chain,
             email=EmailService(chain=chain),
-            scraping=ScrapingService(),
+            scraping=default_scraping_service(),
             connector=get_connector,
             telegram=TelegramClient(),
         )
