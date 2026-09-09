@@ -16,10 +16,15 @@ class ScriptedChain:
 class FakeEmailService:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.draft_calls: list[str] = []
 
     async def digest(self, instruction: str, session) -> str:
         self.calls.append(instruction)
         return "DIGEST"
+
+    async def draft_reply(self, instruction: str, session) -> str:
+        self.draft_calls.append(instruction)
+        return "DRAFT"
 
 
 class FakeScrapingService:
@@ -45,6 +50,19 @@ async def test_email_intent_dispatches_to_the_email_service() -> None:
 
     assert reply == "DIGEST"
     assert svc.calls == ["unread today"]
+
+
+async def test_email_draft_reply_action_routes_to_draft_reply() -> None:
+    chain = ScriptedChain(
+        ['{"kind": "email", "query": "the last one from HR", "action": "draft_reply"}']
+    )
+    svc = FakeEmailService()
+
+    reply = await route("reply to the HR email", session=None, chain=chain, email_service=svc)
+
+    assert reply == "DRAFT"
+    assert svc.draft_calls == ["the last one from HR"]
+    assert svc.calls == []
 
 
 async def test_search_intent_scrapes_then_summarizes_with_context() -> None:

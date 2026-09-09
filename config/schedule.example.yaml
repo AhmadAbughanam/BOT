@@ -89,6 +89,17 @@ tasks:
         - https://hnrss.org/frontpage
         - https://www.theverge.com/rss/index.xml
 
+  - name: releases
+    at: "18:30"
+    source: connector
+    connector: github
+    action: latest
+    params:
+      repos:
+        - python/cpython
+        - pgvector/pgvector
+        - fastapi/fastapi
+
   - name: daily-wrap
     at: "21:00"
     source: core

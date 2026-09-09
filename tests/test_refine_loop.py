@@ -64,6 +64,23 @@ async def test_returns_best_scoring_draft_not_the_last() -> None:
     assert result.iterations == 2
 
 
+async def test_judge_chain_scores_while_main_chain_drafts() -> None:
+    main = ScriptedChain(["draft-1", "revise-should-not-run"])
+    judge = ScriptedChain(['{"score": 0.95, "critique": "great"}'])
+    cfg = RefineConfig(max_iterations=3, score_threshold=0.85, keep_traces=False)
+
+    result = await refine("q", main, cfg, judge_chain=judge)
+
+    assert result.answer == "draft-1"
+    assert judge.prompts and "Score the draft" in judge.prompts[0]
+    assert len(main._replies) == 1  # only the draft was taken from the main chain
+
+
+def test_from_mapping_reads_judge_model() -> None:
+    cfg = RefineConfig.from_mapping({"judge_model": "gemini:gemini-2.0-flash"})
+    assert cfg.judge_model == "gemini:gemini-2.0-flash"
+
+
 def test_parse_eval_handles_noise_around_json() -> None:
     score, critique = _parse_eval('here you go: {"score": 0.73, "critique": "ok"} thanks')
     assert score == 0.73

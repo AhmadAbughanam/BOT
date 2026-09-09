@@ -13,19 +13,24 @@ logger = logging.getLogger(__name__)
 IntentKind = Literal["command", "email", "search", "question"]
 
 _MODEL_KINDS = ("email", "search", "question")
+_EMAIL_ACTIONS = ("digest", "draft_reply")
 
 
 @dataclass
 class Intent:
     kind: IntentKind
     query: str | None = None
+    action: str | None = None  # for kind == "email": "digest" | "draft_reply"
 
 
 _PROMPT = (
     "Classify the user message. Reply with ONLY JSON: "
-    '{"kind": "email" or "search" or "question", "query": "<the request, or null>"}\n'
-    '"email"    = the user wants to read, filter, or summarize their mailbox / inbox.\n'
-    '"search"   = the user wants current news or up-to-date info on a topic '
+    '{"kind": "email"|"search"|"question", "query": "<the request, or null>", '
+    '"action": "digest"|"draft_reply"|null}\n'
+    '"email"    = wants to read, filter, or summarize their mailbox / inbox. '
+    'Set "action" to "draft_reply" if they ask to reply to / respond to / answer an email, '
+    'otherwise "digest".\n'
+    '"search"   = wants current news or up-to-date info on a topic '
     '(headlines, "latest on X", "what happened with Y").\n'
     '"question" = anything else (general knowledge, advice, chit-chat).\n\n'
     "MESSAGE:\n"
@@ -45,4 +50,12 @@ async def classify_intent(text: str, chain: LLMChain) -> Intent:
 
     kind: IntentKind = data["kind"]
     query = data.get("query")
-    return Intent(kind=kind, query=query if isinstance(query, str) and query.strip() else None)
+    action = data.get("action")
+    if kind != "email" or action not in _EMAIL_ACTIONS:
+        action = "digest" if kind == "email" else None
+
+    return Intent(
+        kind=kind,
+        query=query if isinstance(query, str) and query.strip() else None,
+        action=action,
+    )

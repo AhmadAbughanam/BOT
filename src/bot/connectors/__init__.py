@@ -3,12 +3,14 @@ from __future__ import annotations
 from bot.connectors.base import Connector, ConnectorError
 from bot.connectors.feeds import FeedsConnector
 from bot.connectors.finance import FinanceConnector
+from bot.connectors.github import GithubConnector
 from bot.connectors.weather import WeatherConnector
 
 _REGISTRY: dict[str, type] = {
     "weather": WeatherConnector,
     "finance": FinanceConnector,
     "feeds": FeedsConnector,
+    "github": GithubConnector,
 }
 
 
@@ -24,6 +26,7 @@ __all__ = [
     "ConnectorError",
     "FeedsConnector",
     "FinanceConnector",
+    "GithubConnector",
     "WeatherConnector",
     "get_connector",
 ]

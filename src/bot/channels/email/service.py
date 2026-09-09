@@ -20,6 +20,11 @@ _DIGEST_PROMPT = (
     "Start with a one-line count. No markdown.\n\nEMAILS:\n"
 )
 
+_REPLY_PROMPT = (
+    "Draft a concise, polite reply to the email below. Plain text, no salutation placeholders "
+    "like [Name] — use what you can infer. Do not send anything; this is a draft for review.\n\n"
+)
+
 
 class EmailService:
     def __init__(self, reader: MailboxReader | None = None, chain: LLMChain | None = None) -> None:
@@ -39,6 +44,31 @@ class EmailService:
 
         _persist(session, headers)
         return await self._summarize(headers)
+
+    async def draft_reply(self, instruction: str, session: Session) -> str:
+        """Find the message the instruction points at and return a draft reply (never sent)."""
+        spec = await parse_filter(instruction, self._chain)
+        headers = self._reader.search(spec.criteria, limit=max(spec.limit, 5))
+        if not headers:
+            return "No matching mail to reply to."
+
+        target = headers[-1]  # newest match
+        body = self._reader.fetch_body(target.uid)
+        _persist(session, [target])
+
+        prompt = (
+            f"{_REPLY_PROMPT}"
+            f"FROM: {target.from_addr}\nSUBJECT: {target.subject}\nDATE: {target.date_str}\n\n"
+            f"{body or '(body unavailable)'}\n\n"
+            f"REPLY GUIDANCE: {instruction}"
+        )
+        try:
+            result = await self._chain.chat([ChatMessage("user", prompt)])
+            draft = result.text.strip()
+        except LLMError:
+            return "Could not draft a reply right now."
+
+        return f"Draft reply to \"{target.subject}\" ({target.from_addr}) — not sent:\n\n{draft}"
 
     async def _summarize(self, headers: list[MailHeader]) -> str:
         listing = "\n".join(f"{h.from_addr} / {h.subject} / {h.date_str}" for h in headers)

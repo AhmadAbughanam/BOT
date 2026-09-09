@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 Connect = Callable[[], "imaplib.IMAP4"]
 
 _HEADER_FETCH = "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])"
+_BODY_FETCH = "(BODY.PEEK[])"
+_BODY_MAX_CHARS = 4000
 
 
 @dataclass
@@ -73,6 +75,39 @@ def _parse_date(value: str | None) -> datetime | None:
         return None
 
 
+def _strip_html(html: str) -> str:
+    import re
+
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;?", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_body(raw: bytes, max_chars: int) -> str:
+    msg = email.message_from_bytes(raw)
+    plain: str | None = None
+    html: str | None = None
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        ctype = part.get_content_type()
+        if ctype not in ("text/plain", "text/html"):
+            continue
+        try:
+            payload = part.get_payload(decode=True) or b""
+            chunk = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
+        except (LookupError, ValueError):  # pragma: no cover - odd charset
+            continue
+        if ctype == "text/plain" and plain is None:
+            plain = chunk
+        elif ctype == "text/html" and html is None:
+            html = chunk
+    body = plain if plain is not None else (_strip_html(html) if html else "")
+    body = body.strip()
+    return body[:max_chars] + ("…" if len(body) > max_chars else "")
+
+
 def _parse_header_fetch(uid: bytes, msg_data: list) -> MailHeader:
     raw = b""
     for part in msg_data:
@@ -117,6 +152,24 @@ class MailboxReader:
                 if typ == "OK" and msg_data:
                     headers.append(_parse_header_fetch(uid, msg_data))
             return headers
+        finally:
+            with contextlib.suppress(Exception):
+                conn.logout()
+
+    def fetch_body(self, uid: str, mailbox: str = "INBOX", max_chars: int = _BODY_MAX_CHARS) -> str:
+        """Fetch and flatten one message's body to plain text (read-only)."""
+        conn = self._connect()
+        try:
+            conn.select(mailbox, readonly=True)
+            typ, msg_data = conn.fetch(uid.encode() if isinstance(uid, str) else uid, _BODY_FETCH)
+            if typ != "OK" or not msg_data:
+                return ""
+            raw = b""
+            for part in msg_data:
+                if isinstance(part, tuple) and len(part) == 2:
+                    raw = part[1]
+                    break
+            return _extract_body(raw, max_chars)
         finally:
             with contextlib.suppress(Exception):
                 conn.logout()

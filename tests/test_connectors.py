@@ -9,9 +9,10 @@ from bot.connectors.weather import WeatherConnector
 
 
 class FakeResp:
-    def __init__(self, *, json_data=None, text: str = "") -> None:
+    def __init__(self, *, json_data=None, text: str = "", status_code: int = 200) -> None:
         self._json = json_data
         self.text = text
+        self.status_code = status_code
 
     def json(self):
         return self._json
@@ -100,6 +101,37 @@ async def test_feeds_lists_entries() -> None:
 async def test_feeds_without_config() -> None:
     out = await FeedsConnector(get=make_get({})).fetch({"feeds": []})
     assert out == "No feeds configured."
+
+
+# --- github ---------------------------------------------------------------
+
+async def test_github_latest_releases_and_missing() -> None:
+    def _get_router(routes):
+        async def _get(url, *, params=None, headers=None):
+            for fragment, resp in routes.items():
+                if fragment in url:
+                    return resp
+            raise AssertionError(url)
+
+        return _get
+
+    from bot.connectors.github import GithubConnector
+
+    get = _get_router(
+        {
+            "repos/python/cpython/": FakeResp(json_data={"tag_name": "v3.13.1", "published_at": "2026-08-01T00:00:00Z"}),
+            "repos/acme/ghost/": FakeResp(status_code=404, json_data={}),
+        }
+    )
+    out = await GithubConnector(get=get).fetch({"repos": ["python/cpython", "acme/ghost"]})
+    assert "python/cpython v3.13.1 (2026-08-01)" in out
+    assert "acme/ghost: no published release" in out
+
+
+def test_github_connector_registered() -> None:
+    from bot.connectors.github import GithubConnector
+
+    assert isinstance(get_connector("github"), GithubConnector)
 
 
 def test_get_connector_unknown() -> None:

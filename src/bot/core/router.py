@@ -43,6 +43,8 @@ async def route(
 
     if intent.kind == "email":
         service = email_service or EmailService(chain=chain)
+        if intent.action == "draft_reply":
+            return await service.draft_reply(intent.query or text, session)
         return await service.digest(intent.query or text, session)
 
     cfg = RefineConfig.from_mapping(load_loop_defaults())
