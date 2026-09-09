@@ -113,3 +113,16 @@ def default_chain() -> LLMChain:
         load_chain(),
         session_factory=lambda: _managed(SessionLocal),
     )
+
+
+def chain_for_model(spec: str) -> LLMChain:
+    """Single-provider chain from a ``"provider:model"`` string (used for `loop.judge_model`)."""
+    provider, _, model = spec.partition(":")
+    if not provider or not model:
+        raise ValueError(f"expected 'provider:model', got {spec!r}")
+    from bot.storage.db import SessionLocal
+
+    return LLMChain(
+        [ProviderSpec(provider=provider, model=model)],
+        session_factory=lambda: _managed(SessionLocal),
+    )

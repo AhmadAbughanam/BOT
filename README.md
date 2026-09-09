@@ -320,7 +320,13 @@ delivered to Telegram unless it names another channel.
 - [x] `channel_cursors` table (migration `0003`) tracks the last processed message id per thread; allowlist + session caching.
 - [x] `python -m bot.channels.instagram poll [--loop]` CLI and `bot-instagram.service` systemd unit.
 
-All roadmap items are built; further work is enhancements (email body fetch / reply drafting, `loop.judge_model`, more sites/connectors).
+**Phase 9 — enhancements** (branch `phase-9-enhancements`)
+
+- [x] `loop.judge_model` wired: `chain_for_model("provider:model")` gives the self-eval step its own single-provider chain (bad config falls back to the main chain).
+- [x] Email `draft_reply`: intent classifier emits `action` (`digest` | `draft_reply`); `MailboxReader.fetch_body` flattens the target message (plain text, HTML fallback); the LLM returns a review draft, never sent.
+- [x] Registry grows to 13 sites (AP, Ars Technica, Space.com, Nature, Investing.com, MDN); new `github` connector (latest release per repo) + `releases` scheduled task.
+
+All roadmap items and the named enhancements are built.
 
 ## Development
 
@@ -357,8 +363,8 @@ Full runbook in [`deploy/README.md`](deploy/README.md). In short, on a VPS with 
 ## Notes
 
 - Free-tier limits and model names change often — keep `llm.chain` and the per-provider caps in config, not code.
-- `loop.judge_model` is parsed but not yet wired — the refine loop currently scores with the same provider chain.
-- The email reader currently works from message headers only (from / subject / date / message-id); body fetch and reply drafting are a later step.
+- `loop.judge_model` (`"provider:model"`) routes the self-eval step to a dedicated single-provider chain; unset falls back to the main chain.
+- The email digest still works from headers; body fetch is used only for reply drafting (`draft_reply`), which returns a draft for review and never sends.
 - The Telegram webhook needs a public HTTPS endpoint; in dev use a tunnel (e.g. cloudflared) or long polling.
 - Scraping is limited to the locked registry; respect each site's `robots.txt` and terms, cache aggressively,
   and rate-limit per site.

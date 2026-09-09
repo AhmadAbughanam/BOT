@@ -60,3 +60,38 @@ async def test_search_returns_empty_when_no_matches() -> None:
 
     headers = MailboxReader(connect=lambda: Empty()).search(ImapCriteria())
     assert headers == []
+
+
+_MULTIPART = (
+    b"From: a@b.com\r\nSubject: Hi\r\n"
+    b'Content-Type: multipart/alternative; boundary="X"\r\n\r\n'
+    b"--X\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+    b"Hello in plain text.\r\n"
+    b"--X\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+    b"<p>Hello in <b>html</b>.</p>\r\n"
+    b"--X--\r\n"
+)
+
+
+async def test_fetch_body_prefers_plain_text() -> None:
+    class BodyIMAP(FakeIMAP):
+        def fetch(self, uid, spec):
+            return ("OK", [(uid + b" (BODY[])", _MULTIPART), b")"])
+
+    body = MailboxReader(connect=lambda: BodyIMAP()).fetch_body("1")
+    assert body == "Hello in plain text."
+
+
+async def test_fetch_body_falls_back_to_stripped_html() -> None:
+    html_only = (
+        b"From: a@b.com\r\nSubject: Hi\r\n"
+        b"Content-Type: text/html; charset=utf-8\r\n\r\n"
+        b"<div><style>x{}</style><p>Body &nbsp;text</p></div>"
+    )
+
+    class BodyIMAP(FakeIMAP):
+        def fetch(self, uid, spec):
+            return ("OK", [(uid + b" (BODY[])", html_only), b")"])
+
+    body = MailboxReader(connect=lambda: BodyIMAP()).fetch_body("1")
+    assert body == "Body text"

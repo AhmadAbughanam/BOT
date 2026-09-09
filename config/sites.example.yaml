@@ -88,6 +88,61 @@ sites:
       submit_key: Enter
       result_selector: "a.card-title-link"
 
+  - id: apnews
+    name: AP News
+    base_url: https://apnews.com
+    category: news
+    subcategory: world
+    search:
+      mode: url_template
+      url_template: "https://apnews.com/search?q={query}"
+      result_selector: "a.Link"
+
+  # --- tech ---
+  - id: arstechnica
+    name: Ars Technica
+    base_url: https://arstechnica.com
+    category: tech
+    subcategory: hardware
+    search:
+      mode: url_template
+      url_template: "https://arstechnica.com/search/?q={query}"
+      result_selector: "a.tease-url"
+
+  # --- science ---
+  - id: spacecom
+    name: Space.com
+    base_url: https://www.space.com
+    category: science
+    subcategory: space
+    search:
+      mode: url_template
+      url_template: "https://www.space.com/search?searchTerm={query}"
+      result_selector: "a.article-link"
+
+  - id: nature-news
+    name: Nature News
+    base_url: https://www.nature.com
+    category: science
+    subcategory: health
+    search:
+      mode: url_template
+      url_template: "https://www.nature.com/search?q={query}&journal=nature"
+      result_selector: "a.c-card__link"
+
+  # --- markets ---
+  - id: investing
+    name: Investing.com
+    base_url: https://www.investing.com
+    category: markets
+    subcategory: macro
+    search:
+      mode: search_bar
+      open_search_selector: "div.searchTextIcon"
+      input_selector: "input#searchText"
+      submit_key: Enter
+      result_selector: "a.js-inner-all-results-quote-item"
+
   # --- learning ---
   - id: devto
     name: DEV Community
@@ -98,3 +153,13 @@ sites:
       mode: url_template
       url_template: "https://dev.to/search?q={query}"
       result_selector: "a.crayons-story__hidden-navigation-link"
+
+  - id: mdn
+    name: MDN Web Docs
+    base_url: https://developer.mozilla.org
+    category: learning
+    subcategory: docs
+    search:
+      mode: url_template
+      url_template: "https://developer.mozilla.org/en-US/search?q={query}"
+      result_selector: "article.result a"

@@ -10,4 +10,5 @@ CRON_TZ=Asia/Amman
 0 8  * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run weather-agenda
 0 13 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run markets
 0 18 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run tech-feeds
+30 18 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run releases
 0 21 * * * cd /srv/bot && /srv/bot/.venv/bin/python -m bot.scheduler run daily-wrap

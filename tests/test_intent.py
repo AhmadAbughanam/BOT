@@ -26,6 +26,21 @@ async def test_email_intent_carries_the_query() -> None:
     intent = await classify_intent("any unread from bob?", chain)
     assert intent.kind == "email"
     assert intent.query == "unread from bob"
+    assert intent.action == "digest"  # defaulted when model omits it
+
+
+async def test_email_draft_reply_action_is_kept() -> None:
+    chain = OneShotChain('{"kind": "email", "query": "the last one from HR", "action": "draft_reply"}')
+    intent = await classify_intent("draft a reply to the last HR email", chain)
+    assert intent.kind == "email"
+    assert intent.action == "draft_reply"
+
+
+async def test_action_is_none_for_non_email_kinds() -> None:
+    chain = OneShotChain('{"kind": "search", "query": "x", "action": "draft_reply"}')
+    intent = await classify_intent("latest on x", chain)
+    assert intent.kind == "search"
+    assert intent.action is None
 
 
 async def test_search_intent_is_recognized() -> None:
